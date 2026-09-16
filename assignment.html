@@ -250,7 +250,7 @@
       <div class="sec-num">ג</div>
       <div>
         <div class="sec-title">התאמה</div>
-        <div class="sec-sub">לחצו על מושג בעמודה הימנית, ואז על ההגדרה המתאימה בשמאל</div>
+        <div class="sec-sub">לחצו על הגדרה ואז על המושג המתאים. לחיצה חוזרת על פריט מבטלת את ההתאמה</div>
       </div>
     </div>
 
@@ -295,9 +295,10 @@
 </div>
 <script>
 // ── State ──
-let selWord = null;   // { word, btn }
+let selWord = null;
 let activeBlank = null;
-let matchSel = null;  // selected left match item
+let matchSel = null;
+let matchMap = {};   // leftId → rightId (source of truth for matching)
 let done = false;
 
 // ── Multiple Choice ──
@@ -390,29 +391,60 @@ function clearBlankHighlight() {
 }
 
 // ── Matching ──
+function applyMatch(leftId, rightId) {
+  // Undo any previous match for this left item
+  if (matchMap[leftId]) {
+    const prevRight = document.getElementById(matchMap[leftId]);
+    prevRight.classList.remove('matched','p1','p2','p3','p4');
+  }
+  // Undo any previous match where this right item was used
+  Object.keys(matchMap).forEach(lid => {
+    if (matchMap[lid] === rightId) {
+      document.getElementById(lid).classList.remove('matched','p1','p2','p3','p4');
+      delete matchMap[lid];
+    }
+  });
+  matchMap[leftId] = rightId;
+  const left = document.getElementById(leftId);
+  const right = document.getElementById(rightId);
+  const pClass = 'p' + left.dataset.pair;
+  left.classList.add('matched', pClass);
+  right.classList.add('matched', pClass);
+}
+
+function removeMatch(leftId) {
+  if (!matchMap[leftId]) return;
+  document.getElementById(matchMap[leftId]).classList.remove('matched','p1','p2','p3','p4');
+  document.getElementById(leftId).classList.remove('matched','p1','p2','p3','p4');
+  delete matchMap[leftId];
+}
+
 document.querySelectorAll('#match-left .mi').forEach(item => {
   item.addEventListener('click', () => {
-    if (done || item.classList.contains('matched')) return;
-    if (matchSel && matchSel.side === 'right') { matchSel.el.classList.remove('active'); matchSel = null; }
-    if (matchSel && matchSel.el === item) { item.classList.remove('active'); matchSel = null; return; }
+    if (done) return;
+    // Click already-matched item → unmatch it
+    if (matchMap[item.id]) {
+      removeMatch(item.id);
+      if (matchSel && matchSel.el === item) { matchSel = null; }
+      return;
+    }
+    // Toggle active selection
+    if (matchSel && matchSel.el === item) {
+      item.classList.remove('active'); matchSel = null; return;
+    }
     if (matchSel) matchSel.el.classList.remove('active');
     item.classList.add('active');
-    matchSel = { el: item, pair: item.dataset.pair, side: 'left' };
+    matchSel = { el: item, id: item.id };
   });
 });
 
 document.querySelectorAll('#match-right .mi').forEach(item => {
   item.addEventListener('click', () => {
-    if (done || item.classList.contains('matched')) return;
-    if (!matchSel || matchSel.side !== 'left') return;
-
-    const pClass = 'p' + matchSel.pair;
+    if (done || !matchSel) return;
+    const leftId = matchSel.id;
     matchSel.el.classList.remove('active');
-    matchSel.el.classList.add('matched', pClass);
-    item.classList.add('matched', pClass);
-    matchSel.el.dataset.matchedTo = item.id;
-    item.dataset.matchedBy = matchSel.el.id;
     matchSel = null;
+    applyMatch(leftId, item.id);
   });
 });
 
@@ -456,22 +488,23 @@ document.getElementById('checkBtn').addEventListener('click', () => {
   document.querySelectorAll('#match-left .mi').forEach(left => {
     total++;
     left.classList.add('locked');
-    const rightId = left.dataset.matchedTo;
+    const rightId = matchMap[left.id];
+    const pClasses = ['matched','p1','p2','p3','p4'];
+    pClasses.forEach(c => left.classList.remove(c));
     if (!rightId) { left.classList.add('wrong'); return; }
     const right = document.getElementById(rightId);
     right.classList.add('locked');
-    // remove pair color classes before adding correct/wrong
-    ['p1','p2','p3','p4'].forEach(c => { left.classList.remove(c); right.classList.remove(c); });
-    left.classList.remove('matched'); right.classList.remove('matched');
+    pClasses.forEach(c => right.classList.remove(c));
     if (right.dataset.pair === left.dataset.pair) {
       left.classList.add('correct'); right.classList.add('correct'); correct++;
     } else {
       left.classList.add('wrong'); right.classList.add('wrong');
     }
   });
-  // mark unmatched right items as wrong
   document.querySelectorAll('#match-right .mi').forEach(right => {
-    if (!right.dataset.matchedBy && !right.classList.contains('correct') && !right.classList.contains('wrong')) {
+    right.classList.add('locked');
+    if (!right.classList.contains('correct') && !right.classList.contains('wrong')) {
+      ['matched','p1','p2','p3','p4'].forEach(c => right.classList.remove(c));
       right.classList.add('wrong');
     }
   });
@@ -561,9 +594,10 @@ function resetAll() {
     b.classList.remove('used','sel-word'); b.disabled = false;
   });
 
+  matchMap = {};
+  matchSel = null;
   document.querySelectorAll('.mi').forEach(m => {
     m.classList.remove('matched','active','correct','wrong','locked','p1','p2','p3','p4');
-    delete m.dataset.matchedTo; delete m.dataset.matchedBy;
   });
 
   document.getElementById('scoreBox').className = 'score-box';
