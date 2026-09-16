@@ -442,9 +442,80 @@ document.querySelectorAll('.blank').forEach(blank => {
     selWord = { word: dragWord, btn: dragBtn };
     doFill(blank);
     dragWord = null; dragBtn = null;
-    // בטל בחירת לחיצה אם הייתה פעילה
     if (activeBlank) { activeBlank = null; clearBlankHighlight(); }
   });
+});
+
+// ── Touch Drag ──
+let touchClone = null, touchActiveBlank = null;
+
+document.querySelectorAll('.w-btn').forEach(btn => {
+  btn.addEventListener('touchstart', e => {
+    if (done || btn.disabled) return;
+    e.preventDefault();
+    const t = e.touches[0];
+
+    dragWord = btn.dataset.word;
+    dragBtn  = btn;
+    btn.classList.add('dragging');
+
+    // clone שצף מתחת לאצבע
+    touchClone = btn.cloneNode(true);
+    const r = btn.getBoundingClientRect();
+    Object.assign(touchClone.style, {
+      position:       'fixed',
+      top:            (t.clientY - r.height / 2) + 'px',
+      left:           (t.clientX - r.width  / 2) + 'px',
+      width:          r.width  + 'px',
+      pointerEvents:  'none',
+      zIndex:         '9999',
+      opacity:        '0.88',
+      transform:      'scale(1.12)',
+      margin:         '0',
+      background:     '#E0F2FE',
+      borderColor:    '#0891B2',
+      boxShadow:      '0 6px 18px rgba(8,145,178,.25)',
+      transition:     'none'
+    });
+    document.body.appendChild(touchClone);
+    document.querySelectorAll('.blank:not(.locked)').forEach(b => b.classList.add('drop-target'));
+  }, { passive: false });
+
+  btn.addEventListener('touchmove', e => {
+    if (!touchClone) return;
+    e.preventDefault();
+    const t = e.touches[0];
+    const r = touchClone.getBoundingClientRect();
+    touchClone.style.top  = (t.clientY - r.height / 2) + 'px';
+    touchClone.style.left = (t.clientX - r.width  / 2) + 'px';
+
+    // זיהוי חסר מתחת לאצבע
+    touchClone.style.visibility = 'hidden';
+    const el = document.elementFromPoint(t.clientX, t.clientY);
+    touchClone.style.visibility = '';
+    const blank = el && el.closest('.blank:not(.locked)');
+
+    if (touchActiveBlank && touchActiveBlank !== blank)
+      touchActiveBlank.classList.remove('drag-over');
+    if (blank) blank.classList.add('drag-over');
+    touchActiveBlank = blank || null;
+  }, { passive: false });
+
+  btn.addEventListener('touchend', e => {
+    if (!touchClone) return;
+    e.preventDefault();
+    document.body.removeChild(touchClone);
+    touchClone = null;
+    btn.classList.remove('dragging');
+    document.querySelectorAll('.blank').forEach(b => b.classList.remove('drop-target', 'drag-over'));
+
+    if (touchActiveBlank && !done) {
+      selWord = { word: dragWord, btn: dragBtn };
+      doFill(touchActiveBlank);
+    }
+    touchActiveBlank = null;
+    dragWord = null; dragBtn = null;
+  }, { passive: false });
 });
 
 // ── Matching ──
