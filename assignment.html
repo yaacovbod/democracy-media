@@ -285,7 +285,8 @@
     <div class="score-num" id="scoreNum"></div>
     <div class="score-lbl" id="scoreLbl"></div>
     <div class="score-msg" id="scoreMsg"></div>
-    <button class="reset-btn" onclick="resetAll()">נסו שוב</button>
+    <button class="reset-btn" id="editBtn" onclick="editWrong()" style="display:none">✏️ תקנו את השגיאות</button>
+    <button class="reset-btn" onclick="resetAll()" style="margin-right:8px">התחל מחדש</button>
   </div>
 
   <!-- טופס 100% -->
@@ -583,6 +584,11 @@ document.getElementById('checkBtn').addEventListener('click', () => {
     document.getElementById('scoreMsg').textContent = 'חזרו על פרקים 1–3 ונסו מחדש.';
   }
 
+  // הצג כפתור "תקנו שגיאות" רק אם יש שגיאות
+  if (correct < total) {
+    document.getElementById('editBtn').style.display = 'inline-block';
+  }
+
   box.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
   if (correct === total) {
@@ -633,6 +639,55 @@ function submitName() {
     document.getElementById('studentName').disabled = true;
     document.getElementById('sentMsg').classList.add('show');
   }, 800);
+}
+
+// ── Edit Wrong ──
+function editWrong() {
+  done = false;
+  document.getElementById('editBtn').style.display = 'none';
+  document.getElementById('scoreBox').className = 'score-box';
+  document.getElementById('checkBtn').disabled = false;
+
+  // MC — פתח רק שאלות עם תשובה שגויה
+  document.querySelectorAll('.question[data-answer]').forEach(q => {
+    const hasWrong = q.querySelector('.opt.wrong');
+    if (!hasWrong) return; // כולן נכונות — השאר נעול
+    q.querySelectorAll('.opt').forEach(o => {
+      o.classList.remove('wrong', 'locked', 'selected');
+      // תשובה נכונה (מוצגת בירוק) — השאר ירוק אבל אפשר ללחוץ אחרת
+      if (o.classList.contains('correct')) {
+        o.classList.remove('correct'); // נסתיר גם את התשובה הנכונה כדי שיחשבו
+      }
+    });
+  });
+
+  // Fill — החזר מילים שגויות למאגר, פתח את החסרים
+  document.querySelectorAll('.blank.wrong').forEach(blank => {
+    blank.classList.remove('wrong', 'locked');
+    if (blank.dataset.current) returnWord(blank);
+  });
+  document.querySelectorAll('.blank.correct').forEach(blank => {
+    blank.classList.remove('locked'); // ויזואלית נשאר ירוק אבל אפשר לגרור
+    // לחיצה/גרירה על חסר נכון — מנע שינוי
+    blank.classList.add('locked'); // נשאר נעול
+  });
+
+  // Match — בטל זוגות שגויים בלבד
+  const wrongLeftIds = [...document.querySelectorAll('#match-left .mi.wrong')].map(el => el.id);
+  wrongLeftIds.forEach(lid => {
+    const left = document.getElementById(lid);
+    const rightId = matchMap[lid];
+    left.classList.remove('wrong', 'locked', 'matched', 'p1', 'p2', 'p3', 'p4');
+    if (rightId) {
+      const right = document.getElementById(rightId);
+      right.classList.remove('wrong', 'locked', 'matched', 'p1', 'p2', 'p3', 'p4');
+      delete matchMap[lid];
+    }
+  });
+  // פתח גם right items שגויים שלא היו מקושרים ל-left
+  document.querySelectorAll('#match-right .mi.wrong').forEach(r => {
+    r.classList.remove('wrong', 'locked', 'matched', 'p1', 'p2', 'p3', 'p4');
+  });
 }
 
 // ── Reset ──
