@@ -62,6 +62,13 @@
     .w-btn:hover:not(:disabled){border-color:#0891B2;background:#F0F9FF}
     .w-btn.sel-word{border-color:#0891B2;background:#E0F2FE;outline:2px solid #0891B2;outline-offset:2px}
     .w-btn:disabled,.w-btn.used{opacity:.33;cursor:default;border-color:#E5E7EB;color:#999;outline:none}
+    .w-btn[draggable=true]{cursor:grab}
+    .w-btn[draggable=true]:active{cursor:grabbing}
+    .w-btn.dragging{opacity:.35;transform:scale(.94)}
+    .blank{transition:background .13s,border-color .13s,transform .13s}
+    .blank.drop-target{border-bottom-color:#BAE6FD;animation:pulse-blank .9s ease infinite}
+    .blank.drag-over{background:#BAE6FE !important;border-bottom-color:#0891B2 !important;transform:scaleX(1.06);animation:none}
+    @keyframes pulse-blank{0%,100%{border-bottom-color:#0891B2}50%{border-bottom-color:#BAE6FD}}
 
     /* ── התאמה ── */
     .match-hint{font-size:.78rem;color:#888;margin-bottom:12px}
@@ -231,7 +238,7 @@
 
     <!-- מאגר מילים -->
     <div class="bank">
-      <div class="bank-lbl">מאגר מילים — לחצו על מילה ואז על החסר:</div>
+      <div class="bank-lbl">מאגר מילים — גררו מילה לחסר, או לחצו עליה ואז על החסר:</div>
       <button class="w-btn" data-word="של העם">של העם</button>
       <button class="w-btn" data-word="באמצעות העם">באמצעות העם</button>
       <button class="w-btn" data-word="למען העם">למען העם</button>
@@ -389,6 +396,55 @@ function returnWord(blank) {
 function clearBlankHighlight() {
   document.querySelectorAll('.blank').forEach(b => b.classList.remove('active-blank'));
 }
+
+// ── Drag & Drop ──
+let dragWord = null, dragBtn = null;
+
+document.querySelectorAll('.w-btn').forEach(btn => {
+  btn.setAttribute('draggable', 'true');
+
+  btn.addEventListener('dragstart', e => {
+    if (done || btn.disabled) { e.preventDefault(); return; }
+    dragWord = btn.dataset.word;
+    dragBtn = btn;
+    btn.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', btn.dataset.word);
+    // הדגשת כל החסרים כיעדים פוטנציאליים
+    document.querySelectorAll('.blank:not(.locked)').forEach(b => b.classList.add('drop-target'));
+  });
+
+  btn.addEventListener('dragend', () => {
+    btn.classList.remove('dragging');
+    dragWord = null; dragBtn = null;
+    document.querySelectorAll('.blank').forEach(b => b.classList.remove('drop-target', 'drag-over'));
+  });
+});
+
+document.querySelectorAll('.blank').forEach(blank => {
+  blank.addEventListener('dragover', e => {
+    if (!dragWord || done) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    document.querySelectorAll('.blank').forEach(b => b.classList.remove('drag-over'));
+    blank.classList.add('drag-over');
+  });
+
+  blank.addEventListener('dragleave', e => {
+    if (!blank.contains(e.relatedTarget)) blank.classList.remove('drag-over');
+  });
+
+  blank.addEventListener('drop', e => {
+    e.preventDefault();
+    if (!dragWord || done) return;
+    document.querySelectorAll('.blank').forEach(b => b.classList.remove('drop-target', 'drag-over'));
+    selWord = { word: dragWord, btn: dragBtn };
+    doFill(blank);
+    dragWord = null; dragBtn = null;
+    // בטל בחירת לחיצה אם הייתה פעילה
+    if (activeBlank) { activeBlank = null; clearBlankHighlight(); }
+  });
+});
 
 // ── Matching ──
 function applyMatch(leftId, rightId) {
